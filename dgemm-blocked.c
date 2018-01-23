@@ -20,6 +20,11 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
+int calculate_block_size(int n, int cache_size) {
+    double num_blocks = n*sqrt(3/(1.0*cache_size));
+    return num_blocks >= 1 ? sqrt(cache_size/3) : n;
+}
+
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
@@ -97,8 +102,8 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
 {
 
-    int block_size_2 = BLOCK_SIZE_2(lda);
-    int block_size = BLOCK_SIZE(block_size_2);
+    int block_size_2 = calculate_block_size(lda, L2_CACHE);
+    int block_size = calculate_block_size(block_size_2, L1_CACHE);
     /* For each block-row of A */ 
     for (int i = 0; i < M; i += block_size)
         /* For each block-column of B */
@@ -124,7 +129,7 @@ void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restri
  * On exit, A and B maintain their input values. */  
 void square_dgemm (int lda, double* restrict A, double* restrict B, double* restrict C)
 {
-    int block_size_2 = BLOCK_SIZE_2(lda);
+    int block_size_2 = calculate_block_size(lda, L2_CACHE);
     printf("Block Size 2: %d\n", block_size_2);
     /* For each block-row of A */ 
     for (int i = 0; i < lda; i += block_size_2)
