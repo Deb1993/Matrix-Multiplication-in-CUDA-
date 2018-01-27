@@ -61,6 +61,8 @@ ifeq ($(NO_BLAS), 1)
     CFLAGS += -DNO_BLAS
 endif
 
+MY_OPT = -O4 -mfpmath=sse -mno-align-double -march=core2
+
 OPTIMIZATION = $(MY_OPT)
 
 targets = benchmark-naive benchmark-blocked benchmark-blas
@@ -81,7 +83,7 @@ benchmark-blas : benchmark.o dgemm-blas.o $(UTIL)
 	$(CC) -o $@ $^ $(LDLIBS)
 
 %.o : %.c
-	$(CC) -c $(CFLAGS) $<
+	$(CC) -c -g $(CFLAGS) $<
 
 
 .PHONY : clean
