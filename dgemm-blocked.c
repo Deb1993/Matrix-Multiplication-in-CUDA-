@@ -19,12 +19,9 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 // #define BLOCK_SIZE 719
 #endif
 
-#define min(a,b) (((a)<(b))?(a):(b))
+#define TRANSPOSE 1
 
-int calculate_block_size(int n, int cache_size) {
-    double num_blocks = n*sqrt(3/(1.0*cache_size));
-    return num_blocks >= 1 ? sqrt(cache_size/3) : n;
-}
+#define min(a,b) (((a)<(b))?(a):(b))
 
 static void do_vectorize (int lda, int ii, int jj, int kk, double *restrict A, double *restrict B, double *restrict C) {
 
@@ -70,7 +67,7 @@ static void do_block (int lda, int M, int N, int K, double *restrict A, double *
             double cij = C[i*lda+j];
             for (int k = 0; k < K; ++k)
 #ifdef TRANSPOSE
-                cij += A[i*lda+k] * B[j*lda+k];
+                cij += A[k*lda+i] * B[k*lda+j];
 #else
             cij += A[i*lda+k] * B[k*lda+j];
 #endif
@@ -124,7 +121,7 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 		for( int j = 0 ; j < N ; j = j + 4)
 			{
 				for( int k = 0 ; k < K ; k = k + 4) {
-					do_vector(lda, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+					do_vector(lda, A + k*lda + i, B + k*lda + j, C + i*lda + j);
 
 				}
 }
@@ -147,10 +144,30 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
 
                 /* Perform individual block dgemm */
                 if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0)
-                    do_block_vector(lda,M_1,N_1,K_1, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+                    do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
                 else
-                    do_block(lda, M_1, N_1, K_1, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+                    do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
         }
+}
+
+void do_block_transpose(int lda, double *A, int M, int N) {
+    for(int i = 0; i < M; i+=1) {
+        for(int j = 0; j < N; j+=1) {
+            int temp = A[i*lda + j];
+            A[i*lda + j] = A[j*lda + i];
+            A[j*lda + i] = temp;
+        }
+    }
+}
+
+void do_block_transpose_2(int lda, double *A, int M, int N) {
+    for(int i = 0; i < M; i+=BLOCK_SIZE) {
+        for(int j = 0; j < N; j+=BLOCK_SIZE) {
+            int M_1 = min(BLOCK_SIZE_2, M - i);
+            int N_1 = min(BLOCK_SIZE_2, N - j);
+            do_block_transpose(lda, A + i*lda + j, M_1, N_1);
+        }
+    }
 }
 /* This routine performs a dgemm operation
  *  C := C + A * B
@@ -158,10 +175,18 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
  * On exit, A and B maintain their input values. */  
 void square_dgemm (int lda, double *restrict A, double *restrict B, double *restrict C)
 {
+
+    for(int i = 0; i < lda; i+=BLOCK_SIZE_2) {
+        for(int j = 0; j < lda; j+=BLOCK_SIZE_2) {
+            int M = min(BLOCK_SIZE_2, lda - i);
+            int N = min(BLOCK_SIZE_2, lda - j);
+            do_block_transpose_2(lda, A + i*lda + j, M, N);
+        }
+    }
     /* For each block-row of A */ 
-    for (int i = 0; i < lda; i += BLOCK_SIZE_2)
+    for (int i = 0; i < lda; i += BLOCK_SIZE_2) {
         /* For each block-column of B */
-        for (int j = 0; j < lda; j += BLOCK_SIZE_2)
+        for (int j = 0; j < lda; j += BLOCK_SIZE_2) {
             /* Accumulate block dgemms into block of C */
             for (int k = 0; k < lda; k += BLOCK_SIZE_2)
             {
@@ -171,14 +196,16 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
                 int K = min (BLOCK_SIZE_2, lda-k);
 
                 /* Perform individual block dgemm */
-                do_block1(lda, M, N, K, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+                do_block1(lda, M, N, K, A + k*lda + i, B + k*lda + j, C + i*lda + j);
             }
-#ifdef TRANSPOSE
-    for (int i = 0; i < lda; ++i)
-        for (int j = i+1; j < lda; ++j) {
-            double t = B[i*lda+j];
-            B[i*lda+j] = B[j*lda+i];
-            B[j*lda+i] = t;
         }
-#endif
+    }
+
+    for(int i = 0; i < lda; i+=BLOCK_SIZE_2) {
+        for(int j = 0; j < lda; j+=BLOCK_SIZE_2) {
+            int M = min(BLOCK_SIZE_2, lda - i);
+            int N = min(BLOCK_SIZE_2, lda - j);
+            do_block_transpose_2(lda, A + i*lda + j, M, N);
+        }
+    }
 }
