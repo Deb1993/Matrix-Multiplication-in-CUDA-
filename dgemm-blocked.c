@@ -88,10 +88,10 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
 
     for (int i = 0; i < 4; i++)
     {
-        register __m128d a1 = _mm_load1_pd(A + i);  
-        register __m128d a2 = _mm_load1_pd(A + i + lda);
-        register __m128d a3 = _mm_load1_pd(A + i + 2*lda);
-        register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
+        register __m128d a1 = _mm_load1_pd(A + i*lda);  
+        register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
+        register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
+        register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
         register __m128d b  = _mm_loadu_pd(B + i*lda);
         //register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
         register __m128d b1 = _mm_loadu_pd(B + i*lda + 2);
@@ -150,25 +150,16 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
         }
 }
 
-void do_block_transpose(int lda, double *A, int M, int N) {
+void do_transpose(int lda, double *A, int M, int N) {
     for(int i = 0; i < M; i+=1) {
-        for(int j = 0; j < N; j+=1) {
-            int temp = A[i*lda + j];
+        for(int j = i+1; j < N; j+=1) {
+            double  temp = A[i*lda + j];
             A[i*lda + j] = A[j*lda + i];
             A[j*lda + i] = temp;
         }
     }
 }
 
-void do_block_transpose_2(int lda, double *A, int M, int N) {
-    for(int i = 0; i < M; i+=BLOCK_SIZE) {
-        for(int j = 0; j < N; j+=BLOCK_SIZE) {
-            int M_1 = min(BLOCK_SIZE_2, M - i);
-            int N_1 = min(BLOCK_SIZE_2, N - j);
-            do_block_transpose(lda, A + i*lda + j, M_1, N_1);
-        }
-    }
-}
 /* This routine performs a dgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in row-major order
@@ -176,13 +167,7 @@ void do_block_transpose_2(int lda, double *A, int M, int N) {
 void square_dgemm (int lda, double *restrict A, double *restrict B, double *restrict C)
 {
 
-    for(int i = 0; i < lda; i+=BLOCK_SIZE_2) {
-        for(int j = 0; j < lda; j+=BLOCK_SIZE_2) {
-            int M = min(BLOCK_SIZE_2, lda - i);
-            int N = min(BLOCK_SIZE_2, lda - j);
-            do_block_transpose_2(lda, A + i*lda + j, M, N);
-        }
-    }
+    do_transpose(lda, A, lda, lda);
     /* For each block-row of A */ 
     for (int i = 0; i < lda; i += BLOCK_SIZE_2) {
         /* For each block-column of B */
@@ -200,12 +185,6 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
             }
         }
     }
+    do_transpose(lda, A, lda, lda);
 
-    for(int i = 0; i < lda; i+=BLOCK_SIZE_2) {
-        for(int j = 0; j < lda; j+=BLOCK_SIZE_2) {
-            int M = min(BLOCK_SIZE_2, lda - i);
-            int N = min(BLOCK_SIZE_2, lda - j);
-            do_block_transpose_2(lda, A + i*lda + j, M, N);
-        }
-    }
 }

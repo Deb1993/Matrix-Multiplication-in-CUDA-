@@ -75,11 +75,11 @@ default : all
 all : clean $(targets)
 
 benchmark-naive : benchmark.o dgemm-naive.o  $(UTIL)
-	$(CC) -o $@ $^ $(LDLIBS)
+	$(CC) -g -o $@ $^ $(LDLIBS)
 benchmark-blocked : benchmark.o dgemm-blocked.o $(UTIL)
-	$(CC) -o $@ $^ $(LDLIBS)
+	$(CC) -g -o $@ $^ $(LDLIBS)
 benchmark-blas : benchmark.o dgemm-blas.o $(UTIL)
-	$(CC) -o $@ $^ $(LDLIBS)
+	$(CC) -g -o $@ $^ $(LDLIBS)
 
 %.o : %.c
 	$(CC) -c -g $(CFLAGS) $<
