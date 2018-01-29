@@ -11,9 +11,10 @@
 const char* dgemm_desc = "Simple blocked dgemm.";
 
 #if !defined(BLOCK_SIZE)
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 32
 #define BLOCK_SIZE_2 576
 // #define BLOCK_SIZE 719
+#define TRANSPOSE 1 
 #endif
 
 #define min(a,b) (((a)<(b))?(a):(b))
@@ -21,7 +22,7 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 /* This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N. */
-void do_block (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
+void do_block (int lda, int M, int N, int K, double* A, double*  B, double* C)
 {
     /* For each row i of A */
     for (int i = 0; i < M; ++i)
@@ -32,7 +33,7 @@ void do_block (int lda, int M, int N, int K, double* restrict A, double* restric
             double cij = C[i*lda+j];
             for (int k = 0; k < K; ++k)
 #ifdef TRANSPOSE
-                cij += A[i*lda+k] * B[j*lda+k];
+                cij += A[k*lda+i] * B[k*lda+j];
 #else
             cij += A[i*lda+k] * B[k*lda+j];
 #endif
@@ -40,26 +41,27 @@ void do_block (int lda, int M, int N, int K, double* restrict A, double* restric
         }
 }
 
-void do_vector (int lda, double* restrict A, double* restrict B, double* restrict C)
-{
-			register __m128d c00_c01 = _mm_loadu_pd(C);
-			register __m128d c10_c11 = _mm_loadu_pd(C + lda);
-			register __m128d c20_c21 = _mm_loadu_pd(C + 2*lda);
-			register __m128d c30_c31 = _mm_loadu_pd(C + 3*lda);
-                        register __m128d c02_c03 = _mm_loadu_pd(C + 2);
-                        register __m128d c12_c13 = _mm_loadu_pd(C + lda + 2);
-                        register __m128d c22_c23 = _mm_loadu_pd(C + 2*lda + 2);
-                        register __m128d c32_c33 = _mm_loadu_pd(C + 3*lda + 2);
+void do_vector (int lda, double*  A, double*  B, double* C)
+{			
+			register __m128d c00_c01 = _mm_load_pd(C);
+			printf("Hello\n");
+			register __m128d c10_c11 = _mm_load_pd(C + lda);
+			register __m128d c20_c21 = _mm_load_pd(C + 2*lda);
+			register __m128d c30_c31 = _mm_load_pd(C + 3*lda);
+                        register __m128d c02_c03 = _mm_load_pd(C + 2);
+                        register __m128d c12_c13 = _mm_load_pd(C + lda + 2);
+                        register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
+                        register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
 
 				for (int i = 0; i < 4; i++)
 					{
-						register __m128d a1 = _mm_load1_pd(A + i);  
-						register __m128d a2 = _mm_load1_pd(A + i + lda);
-						register __m128d a3 = _mm_load1_pd(A + i + 2*lda);
-						register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
-						register __m128d b  = _mm_loadu_pd(B + i*lda);
+						register __m128d a1 = _mm_load1_pd(A + i*lda);  
+						register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
+						register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
+						register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
+						register __m128d b  = _mm_load_pd(B + i*lda);
 						//register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
-						register __m128d b1 = _mm_loadu_pd(B + i*lda + 2);
+						register __m128d b1 = _mm_load_pd(B + i*lda + 2);
 						c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
 						c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
 						c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
@@ -69,30 +71,30 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
                                                 c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
                                                 c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
 				}
-_mm_storeu_pd(C, c00_c01);
-_mm_storeu_pd(C + lda, c10_c11);
-_mm_storeu_pd(C + 2*lda, c20_c21);
-_mm_storeu_pd(C + 3*lda, c30_c31);
-_mm_storeu_pd(C + 2, c02_c03);
-_mm_storeu_pd(C + lda + 2, c12_c13);
-_mm_storeu_pd(C + 2*lda + 2, c22_c23);
-_mm_storeu_pd(C + 3*lda + 2, c32_c33);
+_mm_store_pd(C, c00_c01);
+_mm_store_pd(C + lda, c10_c11);
+_mm_store_pd(C + 2*lda, c20_c21);
+_mm_store_pd(C + 3*lda, c30_c31);
+_mm_store_pd(C + 2, c02_c03);
+_mm_store_pd(C + lda + 2, c12_c13);
+_mm_store_pd(C + 2*lda + 2, c22_c23);
+_mm_store_pd(C + 3*lda + 2, c32_c33);
 
 }
 
-void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
+void do_block_vector (int lda, int M, int N, int K, double*  A, double*  B, double*  C)
 {
 	for (int i = 0; i < M; i = i + 4)
 		for( int j = 0 ; j < N ; j = j + 4)
 			{
 				for( int k = 0 ; k < K ; k = k + 4) {
-					do_vector(lda, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+					do_vector(lda, A + k*lda + i, B + k*lda + j, (C + i*lda + j);
 
 				}
 }
 }
 
-void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
+void do_block1 (int lda, int M, int N, int K, double*  A, double*  B, double*  C)
 {
     /* For each block-row of A */ 
     for (int i = 0; i < M; i += BLOCK_SIZE)
@@ -107,19 +109,32 @@ void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restri
                 int K_1 = min (BLOCK_SIZE, K-k);
 
                 /* Perform individual block dgemm */
+		printf("M_1 = %d N_1 = %d K_1 = %d\n",M_1,N_1,K_1);
 		if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0)
-			do_block_vector(lda,M_1,N_1,K_1, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+			do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
 		else
-                	do_block(lda, M_1, N_1, K_1, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+                	do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
             }
 }
 /* This routine performs a dgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in row-major order
  * On exit, A and B maintain their input values. */  
-void square_dgemm (int lda, double* restrict A, double* restrict B, double* restrict C)
+void square_dgemm (int lda, double*  A, double*  B, double* C)
 {
-    /* For each block-row of A */ 
+
+
+
+#ifdef TRANSPOSE
+    for (int i = 0; i < lda; ++i)
+        for (int j = i+1; j < lda; ++j) {
+            double t = A[i*lda+j];
+            A[i*lda+j] = A[j*lda+i];
+            A[j*lda+i] = t;
+        }
+#endif
+    
+	/* For each block-row of A */ 
     for (int i = 0; i < lda; i += BLOCK_SIZE_2)
         /* For each block-column of B */
         for (int j = 0; j < lda; j += BLOCK_SIZE_2)
@@ -132,14 +147,15 @@ void square_dgemm (int lda, double* restrict A, double* restrict B, double* rest
                 int K = min (BLOCK_SIZE_2, lda-k);
 
                 /* Perform individual block dgemm */
-                do_block1(lda, M, N, K, A + i*lda + k, B + k*lda + j, C + i*lda + j);
+                do_block1(lda, M, N, K, A + k*lda + i, B + k*lda + j, C + i*lda + j);
             }
+
 #ifdef TRANSPOSE
     for (int i = 0; i < lda; ++i)
         for (int j = i+1; j < lda; ++j) {
-            double t = B[i*lda+j];
-            B[i*lda+j] = B[j*lda+i];
-            B[j*lda+i] = t;
+            double t = A[i*lda+j];
+            A[i*lda+j] = A[j*lda+i];
+            A[j*lda+i] = t;
         }
 #endif
 }
