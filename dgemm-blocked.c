@@ -77,14 +77,14 @@ static void do_block (int lda, int M, int N, int K, double *restrict A, double *
 
 void do_vector (int lda, double* restrict A, double* restrict B, double* restrict C)
 {
-    register __m128d c00_c01 = _mm_loadu_pd(C);
-    register __m128d c10_c11 = _mm_loadu_pd(C + lda);
-    register __m128d c20_c21 = _mm_loadu_pd(C + 2*lda);
-    register __m128d c30_c31 = _mm_loadu_pd(C + 3*lda);
-    register __m128d c02_c03 = _mm_loadu_pd(C + 2);
-    register __m128d c12_c13 = _mm_loadu_pd(C + lda + 2);
-    register __m128d c22_c23 = _mm_loadu_pd(C + 2*lda + 2);
-    register __m128d c32_c33 = _mm_loadu_pd(C + 3*lda + 2);
+    register __m128d c00_c01 = _mm_load_pd(C);
+    register __m128d c10_c11 = _mm_load_pd(C + lda);
+    register __m128d c20_c21 = _mm_load_pd(C + 2*lda);
+    register __m128d c30_c31 = _mm_load_pd(C + 3*lda);
+    register __m128d c02_c03 = _mm_load_pd(C + 2);
+    register __m128d c12_c13 = _mm_load_pd(C + lda + 2);
+    register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
+    register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
 
     for (int i = 0; i < 4; i++)
     {
@@ -92,9 +92,9 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
         register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
         register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
         register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
-        register __m128d b  = _mm_loadu_pd(B + i*lda);
+        register __m128d b  = _mm_load_pd(B + i*lda);
         //register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
-        register __m128d b1 = _mm_loadu_pd(B + i*lda + 2);
+        register __m128d b1 = _mm_load_pd(B + i*lda + 2);
         c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
         c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
         c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
@@ -104,14 +104,14 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
         c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
         c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
     }
-    _mm_storeu_pd(C, c00_c01);
-    _mm_storeu_pd(C + lda, c10_c11);
-    _mm_storeu_pd(C + 2*lda, c20_c21);
-    _mm_storeu_pd(C + 3*lda, c30_c31);
-    _mm_storeu_pd(C + 2, c02_c03);
-    _mm_storeu_pd(C + lda + 2, c12_c13);
-    _mm_storeu_pd(C + 2*lda + 2, c22_c23);
-    _mm_storeu_pd(C + 3*lda + 2, c32_c33);
+    _mm_store_pd(C, c00_c01);
+    _mm_store_pd(C + lda, c10_c11);
+    _mm_store_pd(C + 2*lda, c20_c21);
+    _mm_store_pd(C + 3*lda, c30_c31);
+    _mm_store_pd(C + 2, c02_c03);
+    _mm_store_pd(C + lda + 2, c12_c13);
+    _mm_store_pd(C + 2*lda + 2, c22_c23);
+    _mm_store_pd(C + 3*lda + 2, c32_c33);
 
 }
 
@@ -166,6 +166,7 @@ void do_transpose(int lda, double *A, int M, int N) {
  * On exit, A and B maintain their input values. */  
 void square_dgemm (int lda, double *restrict A, double *restrict B, double *restrict C)
 {
+
 
     do_transpose(lda, A, lda, lda);
     /* For each block-row of A */ 
