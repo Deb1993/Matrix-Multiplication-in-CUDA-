@@ -6,6 +6,7 @@
  *    Support CBLAS interface
  */
 
+#define _GNU_SOURCE_
 #include <math.h>
 #include <stdio.h>
 #include <emmintrin.h>
@@ -150,9 +151,9 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
         }
 }
 
-void do_transpose(int lda, double *A, int M, int N) {
-    for(int i = 0; i < M; i+=1) {
-        for(int j = i+1; j < N; j+=1) {
+void do_transpose(int lda, double *A) {
+    for(int i = 0; i < lda; i+=1) {
+        for(int j = i+1; j < lda; j+=1) {
             double  temp = A[i*lda + j];
             A[i*lda + j] = A[j*lda + i];
             A[j*lda + i] = temp;
@@ -167,14 +168,39 @@ void do_transpose(int lda, double *A, int M, int N) {
 void square_dgemm (int lda, double *restrict A, double *restrict B, double *restrict C)
 {
 
+    int size = lda;
+    double *A_padded = A;
+    double *B_padded = B;
+    double *C_padded = C;
 
-    do_transpose(lda, A, lda, lda);
+    if(lda&1 != 0) {
+        size+=1;
+        posix_memalign((void **)&A_padded, 4096, size*size*sizeof(double));
+        posix_memalign((void **)&B_padded, 4096, size*size*sizeof(double));
+        posix_memalign((void **)&C_padded, 4096, size*size*sizeof(double));
+
+        for(int i = 0; i < size; i+=1) {
+            for(int j = 0; j < size; j+=1) {
+                if(i == lda || j == lda) {
+                    A_padded[i*size + j] = 0;
+                    B_padded[i*size + j] = 0;
+                    C_padded[i*size + j] = 0;
+                } else {
+                    A_padded[i*size + j] = A[i*lda + j];
+                    B_padded[i*size + j] = B[i*lda + j];
+                    C_padded[i*size + j] = C[i*lda + j];
+                }
+            }
+        }
+    }
+
+    do_transpose(size, A_padded);
     /* For each block-row of A */ 
-    for (int i = 0; i < lda; i += BLOCK_SIZE_2) {
+    for (int i = 0; i < size; i += BLOCK_SIZE_2) {
         /* For each block-column of B */
-        for (int j = 0; j < lda; j += BLOCK_SIZE_2) {
+        for (int j = 0; j < size; j += BLOCK_SIZE_2) {
             /* Accumulate block dgemms into block of C */
-            for (int k = 0; k < lda; k += BLOCK_SIZE_2)
+            for (int k = 0; k < size; k += BLOCK_SIZE_2)
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
                 int M = min (BLOCK_SIZE_2, lda-i);
@@ -182,10 +208,21 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
                 int K = min (BLOCK_SIZE_2, lda-k);
 
                 /* Perform individual block dgemm */
-                do_block1(lda, M, N, K, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                do_block1(size, M, N, K, A_padded + k*size + i, B_padded + k*size + j, C_padded + i*size + j);
             }
         }
     }
-    do_transpose(lda, A, lda, lda);
+    if(lda%1 != 0) {
+        for(int i = 0; i < lda; i+=1) {
+            for(int j = 0; j < lda; j+=1) {
+                C[i*lda + j] = C_padded[i*size + j];
+            }
+        }
+        free(A_padded);
+        free(B_padded);
+        free(C_padded);
+    }
+    if(lda&1 == 0)
+        do_transpose(size, A_padded);
 
 }
