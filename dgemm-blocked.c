@@ -98,19 +98,19 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
 
     for (int i = 0; i < 4; i++)
     {
-        register __m128d a1 = _mm_load1_pd(A + i*lda);  
-        register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
-        register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
-        register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
         register __m128d b  = _mm_load_pd(B + i*lda);
-        //register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
         register __m128d b1 = _mm_load_pd(B + i*lda + 2);
+
+        register __m128d a1 = _mm_load1_pd(A + i*lda);  
         temp1 = _mm_mul_pd(a1,b);
+        register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
         temp2 = _mm_mul_pd(a2,b);
         c00_c01 = _mm_add_pd(c00_c01, temp1);
         c10_c11 = _mm_add_pd(c10_c11, temp2);
 
+        register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
         temp1 = _mm_mul_pd(a3,b);
+        register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
         temp2 = _mm_mul_pd(a4,b);
         c20_c21 = _mm_add_pd(c20_c21, temp1);
         c30_c31 = _mm_add_pd(c30_c31, temp2);
