@@ -15,8 +15,8 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #define L1_CACHE 32*1024
 #define L2_CACHE 4*1024*1024
 #if !defined(BLOCK_SIZE)
-#define BLOCK_SIZE 16
-#define BLOCK_SIZE_2 576
+#define BLOCK_SIZE 36
+#define BLOCK_SIZE_2 416
 #endif
 
 #define TRANSPOSE 1
@@ -145,6 +145,9 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 			{
 				for( int k = 0 ; k < K ; k = k + 4) {
 					do_vector(lda, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+					 //int k2 = k + 4;
+					 //__builtin_prefetch(A + k2*lda + i, 0, 0);
+					 //__builtin_prefetch(B + k2*lda + j, 0, 0);
 
 				}
 }
@@ -190,30 +193,51 @@ void pad_C_p2(int lda, int M, int N, double *C) {
         }
 }
 
+void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restrict B, double *restrict C){
+ 
+     for (int i = 0; i < M; i += BLOCK_SIZE) {
+         int M_1 = min (BLOCK_SIZE, M-i);
+         for (int j = 0; j < N; j += BLOCK_SIZE) {
+             int N_1 = min (BLOCK_SIZE, N-j);
+             for (int k = 0; k < K; k += BLOCK_SIZE)
+             {
+                 int K_1 = min (BLOCK_SIZE, K-k);
+ 
+                 if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0)
+                    do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                 else
+                     do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
 
+             }
+         }
+     }
+ }
+
+
+/*
 void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restrict B, double *restrict C)
 {
 
-    /* For each block-row of A */ 
     for (int i = 0; i < M; i += BLOCK_SIZE) {
-        /* For each block-column of B */
         int M_1 = min (BLOCK_SIZE, M-i);
         for (int j = 0; j < N; j += BLOCK_SIZE) {
-            /* Accumulate block dgemms into block of C */
             int N_1 = min (BLOCK_SIZE, N-j);
             pad_C_p2(lda, M_1, N_1, C + i*lda + j);
             for (int k = 0; k < K; k += BLOCK_SIZE)
             {
-                /* Correct block dimensions if block "goes off edge of" the matrix */
                 int K_1 = min (BLOCK_SIZE, K-k);
                 pad_matrices_p2(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j);
                 do_block_vector(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, A_p2, B_p2, C_p2);
+                 int k2 = k + BLOCK_SIZE;
+                __builtin_prefetch(A + k2*BLOCK_SIZE + i, 0, 0);
+                __builtin_prefetch(B + k2*BLOCK_SIZE + j, 0, 0);
             }
             do_copy_p2(lda, M_1, N_1, C + i*lda + j);
         }
     }
 }
 
+*/
 void do_transpose(int lda, double *A) {
     for(int i = 0; i < lda; i+=1) {
         for(int j = i+1; j < lda; j+=1) {
