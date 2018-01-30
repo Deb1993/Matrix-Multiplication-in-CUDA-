@@ -24,6 +24,10 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
+static double A_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
+static double B_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
+static double C_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
+
 static void do_vectorize (int lda, int ii, int jj, int kk, double *restrict A, double *restrict B, double *restrict C) {
 
         __m128d c00_c01 = _mm_loadu_pd (C + ii*lda + jj);
@@ -87,6 +91,8 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
     register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
     register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
 
+    register __m128d temp1, temp2;
+
     for (int i = 0; i < 4; i++)
     {
         register __m128d a1 = _mm_load1_pd(A + i*lda);  
@@ -96,14 +102,27 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
         register __m128d b  = _mm_load_pd(B + i*lda);
         //register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
         register __m128d b1 = _mm_load_pd(B + i*lda + 2);
-        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
-        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
-        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
-        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
-        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
-        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
-        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
-        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+        temp1 = _mm_mul_pd(a1,b);
+        temp2 = _mm_mul_pd(a2,b);
+        c00_c01 = _mm_add_pd(c00_c01, temp1);
+        c10_c11 = _mm_add_pd(c10_c11, temp2);
+
+        temp1 = _mm_mul_pd(a3,b);
+        temp2 = _mm_mul_pd(a4,b);
+        c20_c21 = _mm_add_pd(c20_c21, temp1);
+        c30_c31 = _mm_add_pd(c30_c31, temp2);
+
+
+        temp1 = _mm_mul_pd(a1,b1);
+        temp2 = _mm_mul_pd(a2,b1);
+        c02_c03 = _mm_add_pd(c02_c03, temp1);
+        c12_c13 = _mm_add_pd(c12_c13, temp2);
+
+
+        temp1 = _mm_mul_pd(a3,b1);
+        temp2 = _mm_mul_pd(a4,b1);
+        c22_c23 = _mm_add_pd(c22_c23, temp1);
+        c32_c33 = _mm_add_pd(c32_c33, temp2);
     }
     _mm_store_pd(C, c00_c01);
     _mm_store_pd(C + lda, c10_c11);
@@ -129,14 +148,6 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 }
 
 
-void do_copy(int lda, int M, int N, double *C, double *C_padded) {
-
-    for(int i = 0; i < M-1; i+=1) {
-        for(int j = 0; j < N; j+=1) {
-            C[i*lda + j] = C_padded[i*M + j];
-        }
-    }
-}
 
 void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restrict B, double *restrict C)
 {
@@ -173,6 +184,44 @@ void do_transpose(int lda, double *A) {
     }
 }
 
+void do_copy(int lda, int M, int N, double *C) {
+
+    for(int i = 0; i < M-1; i+=1) {
+        for(int j = 0; j < N; j+=1) {
+            C[i*lda + j] = C_padded[i*BLOCK_SIZE_2 + j];
+        }
+    }
+}
+
+void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
+
+    for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
+        for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
+            if(i >= M || j >= K) {
+                A_padded[i*BLOCK_SIZE_2 + j] = 0;
+            } else {
+                A_padded[i*BLOCK_SIZE_2 + j] = A[i*lda + j];
+            }
+        }
+    }
+
+    for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
+        for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
+            if(i >= K || j >= N) {
+                B_padded[i*BLOCK_SIZE_2 + j] = 0;
+            } else {
+                B_padded[i*BLOCK_SIZE_2 + j] = B[i*lda + j];
+            }
+        }
+    }
+
+    for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
+        for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
+                C_padded[i*BLOCK_SIZE_2 + j] = 0;
+            }
+        }
+}
+
 /* This routine performs a dgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in row-major order
@@ -182,10 +231,8 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
 
     do_transpose(lda, A);
     int size = lda;
-    double *A_padded = A;
-    double *B_padded = B;
-    double *C_padded = C;
 
+    /*
     if(lda&1 != 0) {
         size+=1;
         posix_memalign((void **)&A_padded, 4096, size*size*sizeof(double));
@@ -205,26 +252,29 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
             }
         }
     }
-
+    */
 
     /* For each block-row of A */ 
-    for (int i = 0; i < size; i += BLOCK_SIZE_2) {
+    for (int i = 0; i < lda; i += BLOCK_SIZE_2) {
         /* For each block-column of B */
-        for (int j = 0; j < size; j += BLOCK_SIZE_2) {
+        for (int j = 0; j < lda; j += BLOCK_SIZE_2) {
             /* Accumulate block dgemms into block of C */
-            for (int k = 0; k < size; k += BLOCK_SIZE_2)
+            for (int k = 0; k < lda; k += BLOCK_SIZE_2)
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
-                int M = min (BLOCK_SIZE_2, size-i);
-                int N = min (BLOCK_SIZE_2, size-j);
-                int K = min (BLOCK_SIZE_2, size-k);
+                int M = min (BLOCK_SIZE_2, lda-i);
+                int N = min (BLOCK_SIZE_2, lda-j);
+                int K = min (BLOCK_SIZE_2, lda-k);
+
+                pad_matrices(lda, M, N, K, A, B);
 
                 /* Perform individual block dgemm */
-                do_block1(size, M, N, K, A_padded + k*size + i, B_padded + k*size + j, C_padded + i*size + j);
+                do_block1(BLOCK_SIZE_2, BLOCK_SIZE_2, BLOCK_SIZE_2, BLOCK_SIZE_2, A_padded, B_padded, C_padded);
+                do_copy(lda, M, N, C);
             }
         }
     }
-
+/*
     if(lda&1 != 0) {
         for(int i = 0; i < lda; i+=1) {
             for(int j = 0; j < lda; j+=1) {
@@ -235,6 +285,7 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
         free(B_padded);
         free(C_padded);
     }
+*/
     
     do_transpose(lda, A);
 
