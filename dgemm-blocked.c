@@ -17,7 +17,6 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #if !defined(BLOCK_SIZE)
 #define BLOCK_SIZE 16
 #define BLOCK_SIZE_2 576
-// #define BLOCK_SIZE 719
 #endif
 
 #define TRANSPOSE 1
@@ -184,9 +183,10 @@ void do_transpose(int lda, double *A) {
     }
 }
 
+
 void do_copy(int lda, int M, int N, double *C) {
 
-    for(int i = 0; i < M-1; i+=1) {
+    for(int i = 0; i < M; i+=1) {
         for(int j = 0; j < N; j+=1) {
             C[i*lda + j] = C_padded[i*BLOCK_SIZE_2 + j];
         }
@@ -197,30 +197,33 @@ void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
 
     for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
         for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
-            if(i >= M || j >= K) {
+            if(i >= K || j >= M) {
                 A_padded[i*BLOCK_SIZE_2 + j] = 0;
             } else {
                 A_padded[i*BLOCK_SIZE_2 + j] = A[i*lda + j];
             }
-        }
-    }
 
-    for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
-        for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
             if(i >= K || j >= N) {
                 B_padded[i*BLOCK_SIZE_2 + j] = 0;
             } else {
-                B_padded[i*BLOCK_SIZE_2 + j] = B[i*lda + j];
+	        B_padded[i*BLOCK_SIZE_2 + j] = B[i*lda + j];
             }
+
         }
     }
+}
 
+void pad_C(int lda, int M, int N, double *C) {
     for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
         for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
-                C_padded[i*BLOCK_SIZE_2 + j] = 0;
+                if(i >= M || j >= N) 
+                    C_padded[i*BLOCK_SIZE_2 + j] = 0;
+                else 
+	            C_padded[i*BLOCK_SIZE_2 + j] = C[i*lda + j];
             }
         }
 }
+
 
 /* This routine performs a dgemm operation
  *  C := C + A * B
@@ -231,62 +234,58 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
 
     do_transpose(lda, A);
     int size = lda;
+/*
+    int size = lda % 16 == 0 ? lda : 16*(lda/16 + 1);
+    double *A_padded, *B_padded, *C_padded;
 
-    /*
-    if(lda&1 != 0) {
-        size+=1;
-        posix_memalign((void **)&A_padded, 4096, size*size*sizeof(double));
-        posix_memalign((void **)&B_padded, 4096, size*size*sizeof(double));
-        posix_memalign((void **)&C_padded, 4096, size*size*sizeof(double));
+    posix_memalign((void **)&A_padded, 16, size*size*sizeof(double));
+    posix_memalign((void **)&B_padded, 16, size*size*sizeof(double));
+    posix_memalign((void **)&C_padded, 16, size*size*sizeof(double));
 
-        for(int i = 0; i < size; i+=1) {
-            for(int j = 0; j < size; j+=1) {
-                C_padded[i*size + j] = 0;
-                if(i == lda || j == lda) {
-                    A_padded[i*size + j] = 0;
-                    B_padded[i*size + j] = 0;
-                } else {
-                    A_padded[i*size + j] = A[i*lda + j];
-                    B_padded[i*size + j] = B[i*lda + j];
-                }
+    for(int i = 0; i < size; i+=1) {
+        for(int j = 0; j < size; j+=1) {
+            C_padded[i*size + j] = 0;
+            if(i == lda || j == lda) {
+                A_padded[i*size + j] = 0;
+                B_padded[i*size + j] = 0;
+            } else {
+                A_padded[i*size + j] = A[i*lda + j];
+                B_padded[i*size + j] = B[i*lda + j];
             }
         }
     }
-    */
 
+*/
     /* For each block-row of A */ 
-    for (int i = 0; i < lda; i += BLOCK_SIZE_2) {
+    for (int i = 0; i < size; i += BLOCK_SIZE_2) {
         /* For each block-column of B */
-        for (int j = 0; j < lda; j += BLOCK_SIZE_2) {
+        for (int j = 0; j < size; j += BLOCK_SIZE_2) {
             /* Accumulate block dgemms into block of C */
-            for (int k = 0; k < lda; k += BLOCK_SIZE_2)
+            int M = min (BLOCK_SIZE_2, size-i);
+            int N = min (BLOCK_SIZE_2, size-j);
+            pad_C(lda, M, N, C + i*lda + j);
+            for (int k = 0; k < size; k += BLOCK_SIZE_2)
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
-                int M = min (BLOCK_SIZE_2, lda-i);
-                int N = min (BLOCK_SIZE_2, lda-j);
-                int K = min (BLOCK_SIZE_2, lda-k);
-
-                pad_matrices(lda, M, N, K, A, B);
+                int K = min (BLOCK_SIZE_2, size-k);
+                pad_matrices(lda, M, N, K, A + k*lda + i, B + k*lda + j);
 
                 /* Perform individual block dgemm */
-                do_block1(BLOCK_SIZE_2, BLOCK_SIZE_2, BLOCK_SIZE_2, BLOCK_SIZE_2, A_padded, B_padded, C_padded);
-                do_copy(lda, M, N, C);
+                do_block1(BLOCK_SIZE_2, M, N, K, A_padded, B_padded, C_padded);
             }
+            do_copy(lda, M, N, C + i*lda + j);
         }
     }
 /*
-    if(lda&1 != 0) {
-        for(int i = 0; i < lda; i+=1) {
-            for(int j = 0; j < lda; j+=1) {
-                C[i*lda + j] = C_padded[i*size + j];
-            }
+    for(int i = 0; i < lda; i+=1) {
+        for(int j = 0; j < lda; j+=1) {
+            C[i*lda + j] = C_padded[i*size + j];
         }
-        free(A_padded);
-        free(B_padded);
-        free(C_padded);
     }
-*/
-    
+    free(A_padded);
+    free(B_padded);
+    free(C_padded);
+*/   
     do_transpose(lda, A);
 
 }
