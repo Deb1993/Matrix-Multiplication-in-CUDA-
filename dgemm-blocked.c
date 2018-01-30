@@ -206,10 +206,10 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
                 int K_1 = min (BLOCK_SIZE, K-k);
-                pad_matrices_p2(lda, M_1, N_1, K_1, A + k*lda + j, B + k*lda + j);
-                do_block_vector(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, A_p2 + i, B_p2, C_p2);
+                pad_matrices_p2(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j);
+                do_block_vector(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, A_p2, B_p2, C_p2);
             }
-            do_copy_p2(lda, M, N, C + i*lda + j);
+            do_copy_p2(lda, M_1, N_1, C + i*lda + j);
         }
     }
 }
