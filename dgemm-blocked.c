@@ -27,6 +27,10 @@ static double A_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)))
 static double B_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
 static double C_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
 
+static double A_p2[BLOCK_SIZE*BLOCK_SIZE] __attribute__ ((aligned (16)));
+static double B_p2[BLOCK_SIZE*BLOCK_SIZE] __attribute__ ((aligned (16)));
+static double C_p2[BLOCK_SIZE*BLOCK_SIZE] __attribute__ ((aligned (16)));
+
 static void do_vectorize (int lda, int ii, int jj, int kk, double *restrict A, double *restrict B, double *restrict C) {
 
         __m128d c00_c01 = _mm_loadu_pd (C + ii*lda + jj);
@@ -146,6 +150,45 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 }
 }
 
+void do_copy_p2(int lda, int M, int N, double *C) {
+
+    for(int i = 0; i < M; i+=1) {
+        for(int j = 0; j < N; j+=1) {
+            C[i*lda + j] = C_p2[i*BLOCK_SIZE + j];
+        }
+    }
+}
+
+void pad_matrices_p2(int lda, int M, int N, int K, double *A, double *B) {
+
+    for(int i = 0; i < BLOCK_SIZE; i+=1) {
+        for(int j = 0; j < BLOCK_SIZE; j+=1) {
+            if(i >= K || j >= M) {
+                A_p2[i*BLOCK_SIZE + j] = 0;
+            } else {
+                A_p2[i*BLOCK_SIZE + j] = A[i*lda + j];
+            }
+
+            if(i >= K || j >= N) {
+                B_p2[i*BLOCK_SIZE + j] = 0;
+            } else {
+	        B_p2[i*BLOCK_SIZE + j] = B[i*lda + j];
+            }
+
+        }
+    }
+}
+
+void pad_C_p2(int lda, int M, int N, double *C) {
+    for(int i = 0; i < BLOCK_SIZE; i+=1) {
+        for(int j = 0; j < BLOCK_SIZE; j+=1) {
+                if(i >= M || j >= N) 
+                    C_p2[i*BLOCK_SIZE + j] = 0;
+                else 
+	            C_p2[i*BLOCK_SIZE + j] = C[i*lda + j];
+            }
+        }
+}
 
 
 void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restrict B, double *restrict C)
@@ -158,17 +201,15 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
         for (int j = 0; j < N; j += BLOCK_SIZE) {
             /* Accumulate block dgemms into block of C */
             int N_1 = min (BLOCK_SIZE, N-j);
+            pad_C_p2(lda, M_1, N_1, C + i*lda + j);
             for (int k = 0; k < K; k += BLOCK_SIZE)
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
                 int K_1 = min (BLOCK_SIZE, K-k);
-
-                /* Perform individual block dgemm */
-                if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0)
-                   do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
-                else
-                    do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                pad_matrices_p2(lda, M_1, N_1, K_1, A + k*lda + j, B + k*lda + j);
+                do_block_vector(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, A_p2 + i, B_p2, C_p2);
             }
+            do_copy_p2(lda, M, N, C + i*lda + j);
         }
     }
 }
