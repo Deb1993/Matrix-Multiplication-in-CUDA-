@@ -225,7 +225,7 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
         }
     }
 
-    if(lda%1 != 0) {
+    if(lda&1 != 0) {
         for(int i = 0; i < lda; i+=1) {
             for(int j = 0; j < lda; j+=1) {
                 C[i*lda + j] = C_padded[i*size + j];
