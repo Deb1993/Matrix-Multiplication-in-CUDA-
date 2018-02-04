@@ -61,7 +61,7 @@ ifeq ($(NO_BLAS), 1)
     CFLAGS += -DNO_BLAS
 endif
 
-MY_OPT = -O4 -mfpmath=sse -mno-align-double -march=core2 -mavx
+MY_OPT = -O4 -mfpmath=sse -mno-align-double -march=core2
 OPTIMIZATION = $(MY_OPT)
 
 targets = benchmark-naive benchmark-blocked benchmark-blas

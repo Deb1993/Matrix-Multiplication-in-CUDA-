@@ -17,20 +17,21 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #define L2_CACHE 4*1024*1024
 #if !defined(BLOCK_SIZE)
 #define BLOCK_SIZE 32
+#define BLOCK_SIZE_K 32
 #define BLOCK_SIZE_2 416
+#define BLOCK_SIZE_2_K 32
 #endif
 
 #define TRANSPOSE 1
-#define SSE 1
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
-static double A_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
-static double B_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
+static double A_padded[BLOCK_SIZE_2*BLOCK_SIZE_2_K] __attribute__ ((aligned (16)));
+static double B_padded[BLOCK_SIZE_2*BLOCK_SIZE_2_K] __attribute__ ((aligned (16)));
 static double C_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)));
 
-static double A_p2[BLOCK_SIZE*BLOCK_SIZE] __attribute__ ((aligned (16)));
-static double B_p2[BLOCK_SIZE*BLOCK_SIZE] __attribute__ ((aligned (16)));
+static double A_p2[BLOCK_SIZE*BLOCK_SIZE_K] __attribute__ ((aligned (16)));
+static double B_p2[BLOCK_SIZE*BLOCK_SIZE_K] __attribute__ ((aligned (16)));
 static double C_p2[BLOCK_SIZE*BLOCK_SIZE] __attribute__ ((aligned (16)));
 
 static void do_vectorize (int lda, int ii, int jj, int kk, double *restrict A, double *restrict B, double *restrict C) {
@@ -209,91 +210,48 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 }
 }
 
- void do_vector_avx (int lda, double* restrict A, double* restrict B, double* restrict C)
- {
- 
-             register __m256d c00_c03 = _mm256_load_pd(C);
-             //printf("Hello\n");
-             register __m256d c10_c13 = _mm256_load_pd(C + lda);
-             register __m256d c20_c23 = _mm256_load_pd(C + 2*lda);
-             register __m256d c30_c33 = _mm256_load_pd(C + 3*lda);
- 
-             for( int i = 0 ; i < 4 ; i++) {
- 
-                 register __m256d a0 = _mm256_set1_pd(A[i*lda]);
-                 //register __m256d a1 = _mm256_shuffle_pd(a0,a0,0);
-                 register __m256d b1 = _mm256_load_pd(B + i*lda);
-                 c00_c03 = _mm256_add_pd(c00_c03, _mm256_mul_pd(a0,b1));
-                 a0 = _mm256_set1_pd(A[i*lda +1]);
-                 //a1 = _mm256_shuffle_pd(a0,a0,0);
-                 c10_c13 = _mm256_add_pd(c10_c13, _mm256_mul_pd(a0,b1));
-                 a0 = _mm256_set1_pd(A[i*lda + 2]);
-                 //a1 = _mm256_shuffle_pd(a0,a0,0);
-                 c20_c23 = _mm256_add_pd(c20_c23, _mm256_mul_pd(a0,b1));
-                 a0 = _mm256_set1_pd(A[i*lda + 3]);
-                 //a1 = _mm256_shuffle_pd(a0,a0,0);
-                 c30_c33 = _mm256_add_pd(c30_c33, _mm256_mul_pd(a0,b1));
-             }
- 
- _mm256_store_pd(C, c00_c03);
- _mm256_store_pd(C + 1*lda, c10_c13);
- _mm256_store_pd(C + 2*lda, c20_c23);
- _mm256_store_pd(C + 3*lda, c30_c33);
- }
- 
- void do_block_vector_avx(int lda,int M,int N,int K, double* restrict A, double* restrict B, double* restrict C)
- {
-     for (int i = 0; i < M; i = i + 4)
-         for( int j = 0 ; j < N ; j = j + 4)
-             {
-                 for( int k = 0 ; k < K ; k = k + 4) {
-                     do_vector_avx(lda, A + k*lda + i, B + k*lda + j, C + i*lda + j);
- 
-                 }
- 
-             }
- }
-
 
 void do_copy_p2(int lda, int M, int N, double *C) {
 
+    double *src = C_p2, *dst = C;
     for(int i = 0; i < M; i+=1) {
-        for(int j = 0; j < N; j+=1) {
-            C[i*lda + j] = C_p2[i*BLOCK_SIZE + j];
-        }
+        memcpy(dst, src, N*sizeof(double));
+        src+=BLOCK_SIZE;
+        dst+=lda;
     }
 }
 
 void pad_matrices_p2(int lda, int M, int N, int K, double *A, double *B) {
 
-    for(int i = 0; i < BLOCK_SIZE; i+=1) {
-        for(int j = 0; j < BLOCK_SIZE; j+=1) {
-            if(i >= K || j >= M) {
-                A_p2[i*BLOCK_SIZE + j] = 0;
-            } else {
-                A_p2[i*BLOCK_SIZE + j] = A[i*lda + j];
-            }
-
-            if(i >= K || j >= N) {
-                B_p2[i*BLOCK_SIZE + j] = 0;
-            } else {
-	        B_p2[i*BLOCK_SIZE + j] = B[i*lda + j];
-            }
-
-        }
-    }
+    memset(A_p2, 0, BLOCK_SIZE*BLOCK_SIZE_K);
+    memset(B_p2, 0, BLOCK_SIZE*BLOCK_SIZE_K);
+ 
+     double *src = A;
+     double *dst = A_p2;
+     for(int i = 0; i < K; i+=1) {
+         memcpy(dst, src, M*sizeof(double));
+         src+=lda;
+         dst+=BLOCK_SIZE;
+     }
+     src = B;
+     dst = B_p2;
+     for(int i = 0; i < K; i+=1) {
+         memcpy(dst, src, N*sizeof(double));
+         src+=lda;
+         dst+=BLOCK_SIZE;
+     }
 }
 
 void pad_C_p2(int lda, int M, int N, double *C) {
-    for(int i = 0; i < BLOCK_SIZE; i+=1) {
-        for(int j = 0; j < BLOCK_SIZE; j+=1) {
-                if(i >= M || j >= N) 
-                    C_p2[i*BLOCK_SIZE + j] = 0;
-                else 
-	            C_p2[i*BLOCK_SIZE + j] = C[i*lda + j];
-            }
-        }
+    memset(C_p2, 0, BLOCK_SIZE*BLOCK_SIZE);
+    double *src = C, *dst = C_p2;
+    for(int i = 0; i < M; i+=1) {
+        memcpy(dst, src, N*sizeof(double));
+        src+=lda;
+        dst+=BLOCK_SIZE;
+    }
 }
+
 
 void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restrict B, double *restrict C){
  
@@ -301,18 +259,12 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
          int M_1 = min (BLOCK_SIZE, M-i);
          for (int j = 0; j < N; j += BLOCK_SIZE) {
              int N_1 = min (BLOCK_SIZE, N-j);
-             for (int k = 0; k < K; k += BLOCK_SIZE)
+             for (int k = 0; k < K; k += BLOCK_SIZE_K)
              {
-                 int K_1 = min (BLOCK_SIZE, K-k);
+                 int K_1 = min (BLOCK_SIZE_K, K-k);
  
                  if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0)
-                    #ifdef SSE
-                        do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
-                    #endif
-                    
-                    #ifdef AVX
-                        do_block_vector_avx(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
-                    #endif
+                     do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
                  else
                      do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
 
@@ -331,21 +283,19 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
         for (int j = 0; j < N; j += BLOCK_SIZE) {
             int N_1 = min (BLOCK_SIZE, N-j);
             pad_C_p2(lda, M_1, N_1, C + i*lda + j);
-            for (int k = 0; k < K; k += BLOCK_SIZE)
+            for (int k = 0; k < K; k += BLOCK_SIZE_K)
             {
-                int K_1 = min (BLOCK_SIZE, K-k);
+                int K_1 = min (BLOCK_SIZE_K, K-k);
                 pad_matrices_p2(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j);
-                do_block_vector(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, A_p2, B_p2, C_p2);
-                 int k2 = k + BLOCK_SIZE;
-                __builtin_prefetch(A + k2*BLOCK_SIZE + i, 0, 0);
-                __builtin_prefetch(B + k2*BLOCK_SIZE + j, 0, 0);
+                do_block_vector(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE_K, A_p2, B_p2, C_p2);
             }
             do_copy_p2(lda, M_1, N_1, C + i*lda + j);
         }
     }
 }
-
 */
+
+
 void do_transpose(int lda, double *A) {
     for(int i = 0; i < lda; i+=1) {
         for(int j = i+1; j < lda; j+=1) {
@@ -359,17 +309,18 @@ void do_transpose(int lda, double *A) {
 
 void do_copy(int lda, int M, int N, double *C) {
 
+    double *src = C_padded, *dst = C;
     for(int i = 0; i < M; i+=1) {
-        for(int j = 0; j < N; j+=1) {
-            C[i*lda + j] = C_padded[i*BLOCK_SIZE_2 + j];
-        }
+        memcpy(dst, src, N*sizeof(double));
+        src+=BLOCK_SIZE_2;
+        dst+=lda;
     }
 }
 
 void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
 
-    memset(A_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2);
-    memset(B_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2);
+    memset(A_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2_K);
+    memset(B_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2_K);
  
      double *src = A;
      double *dst = A_padded;
@@ -445,10 +396,10 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
             int M = min (BLOCK_SIZE_2, size-i);
             int N = min (BLOCK_SIZE_2, size-j);
             pad_C(lda, M, N, C + i*lda + j);
-            for (int k = 0; k < size; k += BLOCK_SIZE_2)
+            for (int k = 0; k < size; k += BLOCK_SIZE_2_K)
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
-                int K = min (BLOCK_SIZE_2, size-k);
+                int K = min (BLOCK_SIZE_2_K, size-k);
                 pad_matrices(lda, M, N, K, A + k*lda + i, B + k*lda + j);
                 //printf("NORMAL\n");
                 //printMatrix(A, M, K);
