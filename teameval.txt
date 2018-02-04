@@ -1,44 +1,59 @@
                     CSE 260, Parallel Computation
                             (Winter 2018)
-           Department of Computer Science and Engineering 	
-                 University of California, San Diego 	
+           Department of Computer Science and Engineering
+                 University of California, San Diego
 
 
 		Team Self Evaluation Form, Assignment #1
 
-Each team must submit one copy of this self evaluation form. 
+Each team must submit one copy of this self evaluation form.
 The members of each team should discuss how they
 worked together and what to write for the evaluation.
 If you worked alone leave column B blank
 
 (1) List the names of your team members:
 
-A:
+A: Kunal Kashilkar
 
- 
-B:
 
- 
- 
+B: Debosmit Majumder
+
+
+
 (2) Estimate how much time each team member devoted to this project, in HOURS.
 
   	                        A 	       B
-meetings 	  	  	 
-coding 	  	  	 
-writeup 	  	  	 
-planning (alone) 	  	  	 
-total (including meetings) 	  	  	 
+meetings 	  	  	        36         36
+coding 	  	  	            48         48
+writeup 	  	  	        12         12
+planning (alone) 	  	  	12         12
+total (including meetings) 	108  	   108
 
 
 (3) Discuss the following.
 (a) If you worked in a team, what were the major responsibilities
     of each team member?
+    > A: The major responsibilities were implementing and optimizing blocking, padding and aligning the matrices to improve load/store operations.
+      B: The major responsibilities were implementing and optimizing vectorization and AVX.
+
 (b) Did you complete the assignment?
+    > Yes we completed the assignment.
+
 (c) What were your major strengths and weaknesses in doing this
     assignment (individually or in a team)?
     If in a team, also discuss how your team worked together.
+    > As a team we divided the work optimally and were sure that each person would complete the task that he took up.
+    We were also able to efficiently communicate and integrate each others work into the main program. Finally we managed our time
+    properly to avoid last minute scrambling.
+
 (d) What  lessons did you learn from these events.
+    > We believe that we could have researched the area further to achieve higher performance.
+
 (e) If in a team, whether and how you plan to change the way
     your work together .
+    > NA
+
 (f) Anything else that comes to mind.
+   > NA
 (g) What suggestions do you have to improve this assignment?
+    > A discussion after the assignment has been submitted for various ways that can be used to improve the result would be very helpful.
