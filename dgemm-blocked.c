@@ -167,33 +167,33 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 void do_vector_avx (int lda, double* restrict A, double* restrict B, double* restrict C) 
 {
 
-			register __m256d c00_c03 = _mm256_loadu_pd(C);
+			register __m256d c00_c03 = _mm256_load_pd(C);
 			//printf("Hello\n");
-			register __m256d c10_c13 = _mm256_loadu_pd(C + lda);
-			register __m256d c20_c23 = _mm256_loadu_pd(C + 2*lda);
-			register __m256d c30_c33 = _mm256_loadu_pd(C + 3*lda);
+			register __m256d c10_c13 = _mm256_load_pd(C + lda);
+			register __m256d c20_c23 = _mm256_load_pd(C + 2*lda);
+			register __m256d c30_c33 = _mm256_load_pd(C + 3*lda);
 				
 			for( int i = 0 ; i < 4 ; i++) {
 			
-				register __m256d a0 = _mm256_loadu2_m128d(A + i*lda,A + i*lda);
-				register __m256d a1 = _mm256_shuffle_pd(a0,a0,0);
-				register __m256d b1 = _mm256_loadu_pd(B + i*lda);
-				c00_c03 = _mm256_add_pd(c00_c03, _mm256_mul_pd(a1,b1));
-				a0 = _mm256_loadu2_m128d(A + i*lda + 1,A + i*lda + 1);
-				a1 = _mm256_shuffle_pd(a0,a0,0);
-				c10_c13 = _mm256_add_pd(c10_c13, _mm256_mul_pd(a1,b1));
-				a0 = _mm256_loadu2_m128d(A + i*lda + 2,A + i*lda + 2);
-				a1 = _mm256_shuffle_pd(a0,a0,0);
-				c20_c23 = _mm256_add_pd(c20_c23, _mm256_mul_pd(a1,b1));
-				a0 = _mm256_loadu2_m128d(A + i*lda + 3,A + i*lda + 3);
-				a1 = _mm256_shuffle_pd(a0,a0,0);
-				c30_c33 = _mm256_add_pd(c30_c33, _mm256_mul_pd(a1,b1));
+				register __m256d a0 = _mm256_set1_pd(A[i*lda]);
+				//register __m256d a1 = _mm256_shuffle_pd(a0,a0,0);
+				register __m256d b1 = _mm256_load_pd(B + i*lda);
+				c00_c03 = _mm256_add_pd(c00_c03, _mm256_mul_pd(a0,b1));
+				a0 = _mm256_set1_pd(A[i*lda +1]);
+				//a1 = _mm256_shuffle_pd(a0,a0,0);
+				c10_c13 = _mm256_add_pd(c10_c13, _mm256_mul_pd(a0,b1));
+				a0 = _mm256_set1_pd(A[i*lda + 2]);
+				//a1 = _mm256_shuffle_pd(a0,a0,0);
+				c20_c23 = _mm256_add_pd(c20_c23, _mm256_mul_pd(a0,b1));
+				a0 = _mm256_set1_pd(A[i*lda + 3]);
+				//a1 = _mm256_shuffle_pd(a0,a0,0);
+				c30_c33 = _mm256_add_pd(c30_c33, _mm256_mul_pd(a0,b1));
 			}
 
-_mm256_storeu_pd(C, c00_c03);
-_mm256_storeu_pd(C + 1*lda, c10_c13);
-_mm256_storeu_pd(C + 2*lda, c20_c23);
-_mm256_storeu_pd(C + 3*lda, c30_c33);
+_mm256_store_pd(C, c00_c03);
+_mm256_store_pd(C + 1*lda, c10_c13);
+_mm256_store_pd(C + 2*lda, c20_c23);
+_mm256_store_pd(C + 3*lda, c30_c33);
 }
 
 void do_block_vector_avx(int lda,int M,int N,int K, double* restrict A, double* restrict B, double* restrict C)
