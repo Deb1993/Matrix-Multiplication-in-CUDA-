@@ -6,16 +6,17 @@
  *    Support CBLAS interface
  */
 
-#include <emmintrin.h>
-#include <immintrin.h>
+#include <x86intrin.h>
 
 const char* dgemm_desc = "Simple blocked dgemm.";
 
 #if !defined(BLOCK_SIZE)
-#define BLOCK_SIZE 16
-#define BLOCK_SIZE_2 576
+#define BLOCK_SIZE 32
+#define BLOCK_SIZE_2 416
 // #define BLOCK_SIZE 719
 #define TRANSPOSE 1 
+//#define SSE 1
+#define AVX 1
 #endif
 
 #define min(a,b) (((a)<(b))?(a):(b))
@@ -162,9 +163,55 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 }
 }
 
-void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
+
+void do_vector_avx (int lda, double* restrict A, double* restrict B, double* restrict C) 
 {
-    /* For each block-row of A */ 
+
+			register __m256d c00_c03 = _mm256_loadu_pd(C);
+			//printf("Hello\n");
+			register __m256d c10_c13 = _mm256_loadu_pd(C + lda);
+			register __m256d c20_c23 = _mm256_loadu_pd(C + 2*lda);
+			register __m256d c30_c33 = _mm256_loadu_pd(C + 3*lda);
+				
+			for( int i = 0 ; i < 4 ; i++) {
+			
+				register __m256d a0 = _mm256_loadu2_m128d(A + i*lda,A + i*lda);
+				register __m256d a1 = _mm256_shuffle_pd(a0,a0,0);
+				register __m256d b1 = _mm256_loadu_pd(B + i*lda);
+				c00_c03 = _mm256_add_pd(c00_c03, _mm256_mul_pd(a1,b1));
+				a0 = _mm256_loadu2_m128d(A + i*lda + 1,A + i*lda + 1);
+				a1 = _mm256_shuffle_pd(a0,a0,0);
+				c10_c13 = _mm256_add_pd(c10_c13, _mm256_mul_pd(a1,b1));
+				a0 = _mm256_loadu2_m128d(A + i*lda + 2,A + i*lda + 2);
+				a1 = _mm256_shuffle_pd(a0,a0,0);
+				c20_c23 = _mm256_add_pd(c20_c23, _mm256_mul_pd(a1,b1));
+				a0 = _mm256_loadu2_m128d(A + i*lda + 3,A + i*lda + 3);
+				a1 = _mm256_shuffle_pd(a0,a0,0);
+				c30_c33 = _mm256_add_pd(c30_c33, _mm256_mul_pd(a1,b1));
+			}
+
+_mm256_storeu_pd(C, c00_c03);
+_mm256_storeu_pd(C + 1*lda, c10_c13);
+_mm256_storeu_pd(C + 2*lda, c20_c23);
+_mm256_storeu_pd(C + 3*lda, c30_c33);
+}
+
+void do_block_vector_avx(int lda,int M,int N,int K, double* restrict A, double* restrict B, double* restrict C)
+{
+	for (int i = 0; i < M; i = i + 4)
+		for( int j = 0 ; j < N ; j = j + 4)
+			{
+				for( int k = 0 ; k < K ; k = k + 4) {
+					do_vector_avx(lda, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+
+				}
+
+			}
+}
+
+
+void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
+  {  /* For each block-row of A */ 
     for (int i = 0; i < M; i += BLOCK_SIZE)
         /* For each block-column of B */
         for (int j = 0; j < N; j += BLOCK_SIZE)
@@ -178,6 +225,7 @@ void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restri
 
                 /* Perform individual block dgemm */
 		//printf("M_1 = %d N_1 = %d K_1 = %d\n",M_1,N_1,K_1);
+	#ifdef SSE
 	if(K_1 == 2*BLOCK_SIZE) {
 		if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0){
 			do_block_vector(lda,M_1,N_1,K_1/2, A + k*lda + i, B + k*lda + j, C + i*lda + j);
@@ -189,6 +237,22 @@ void do_block1 (int lda, int M, int N, int K, double* restrict A, double* restri
 	else
                 	do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
 		
+	#endif
+	
+	#ifdef AVX
+        if(K_1 == 2*BLOCK_SIZE) {
+                if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0){
+                        do_block_vector_avx(lda,M_1,N_1,K_1/2, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                        do_block_vector_avx(lda,M_1,N_1,K_1/2, A + (k+BLOCK_SIZE)*lda + i, B + (k+BLOCK_SIZE)*lda + j, C + i*lda + j); }
+                else {
+                        do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                     }
+        }
+        else
+                        do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+
+	#endif
+	
   }
 }
 /* This routine performs a dgemm operation
