@@ -10,6 +10,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <emmintrin.h>
+#include <string.h>
 const char* dgemm_desc = "Simple blocked dgemm.";
 
 #define L1_CACHE 32*1024
@@ -260,36 +261,44 @@ void do_copy(int lda, int M, int N, double *C) {
 
 void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
 
-    for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
-        for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
-            if(i >= K || j >= M) {
-                A_padded[i*BLOCK_SIZE_2 + j] = 0;
-            } else {
-                A_padded[i*BLOCK_SIZE_2 + j] = A[i*lda + j];
-            }
-
-            if(i >= K || j >= N) {
-                B_padded[i*BLOCK_SIZE_2 + j] = 0;
-            } else {
-	        B_padded[i*BLOCK_SIZE_2 + j] = B[i*lda + j];
-            }
-
-        }
-    }
+    memset(A_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2);
+    memset(B_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2);
+ 
+     double *src = A;
+     double *dst = A_padded;
+     for(int i = 0; i < K; i+=1) {
+         memcpy(dst, src, M*sizeof(double));
+         src+=lda;
+         dst+=BLOCK_SIZE_2;
+     }
+     src = B;
+     dst = B_padded;
+     for(int i = 0; i < K; i+=1) {
+         memcpy(dst, src, N*sizeof(double));
+         src+=lda;
+         dst+=BLOCK_SIZE_2;
+     }
 }
 
 void pad_C(int lda, int M, int N, double *C) {
-    for(int i = 0; i < BLOCK_SIZE_2; i+=1) {
-        for(int j = 0; j < BLOCK_SIZE_2; j+=1) {
-                if(i >= M || j >= N) 
-                    C_padded[i*BLOCK_SIZE_2 + j] = 0;
-                else 
-	            C_padded[i*BLOCK_SIZE_2 + j] = C[i*lda + j];
-            }
-        }
+    memset(C_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2);
+    double *src = C, *dst = C_padded;
+    for(int i = 0; i < M; i+=1) {
+        memcpy(dst, src, N*sizeof(double));
+        src+=lda;
+        dst+=BLOCK_SIZE_2;
+    }
 }
 
 
+void printMatrix(double *A, int M, int N) {
+    for(int i = 0; i < M; i+=1) {
+        for(int j = 0; j < N; j+=1) {
+            printf("%f ", A[i*M + j]);
+        }
+            printf("\n");
+    }
+}
 /* This routine performs a dgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in row-major order
@@ -334,7 +343,10 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
                 /* Correct block dimensions if block "goes off edge of" the matrix */
                 int K = min (BLOCK_SIZE_2, size-k);
                 pad_matrices(lda, M, N, K, A + k*lda + i, B + k*lda + j);
-
+                //printf("NORMAL\n");
+                //printMatrix(A, M, K);
+                //printf("PADDED\n");
+                //printMatrix(A_padded, M, K);
                 /* Perform individual block dgemm */
                 do_block1(BLOCK_SIZE_2, M, N, K, A_padded, B_padded, C_padded);
             }
