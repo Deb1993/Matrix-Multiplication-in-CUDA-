@@ -9,18 +9,19 @@
 #define _GNU_SOURCE_
 #include <math.h>
 #include <stdio.h>
-#include <emmintrin.h>
+#include <x86intrin.h>
 #include <string.h>
 const char* dgemm_desc = "Simple blocked dgemm.";
 
 #define L1_CACHE 32*1024
 #define L2_CACHE 4*1024*1024
 #if !defined(BLOCK_SIZE)
-#define BLOCK_SIZE 36
+#define BLOCK_SIZE 32
 #define BLOCK_SIZE_2 416
 #endif
 
 #define TRANSPOSE 1
+#define SSE 1
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
@@ -85,59 +86,113 @@ static void do_block (int lda, int M, int N, int K, double *restrict A, double *
 }
 
 void do_vector (int lda, double* restrict A, double* restrict B, double* restrict C)
-{
-    register __m128d c00_c01 = _mm_load_pd(C);
-    register __m128d c10_c11 = _mm_load_pd(C + lda);
-    register __m128d c20_c21 = _mm_load_pd(C + 2*lda);
-    register __m128d c30_c31 = _mm_load_pd(C + 3*lda);
-    register __m128d c02_c03 = _mm_load_pd(C + 2);
-    register __m128d c12_c13 = _mm_load_pd(C + lda + 2);
-    register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
-    register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
+{			
+			register __m128d c00_c01 = _mm_load_pd(C);
+			//printf("Hello\n");
+			register __m128d c10_c11 = _mm_load_pd(C + lda);
+			register __m128d c20_c21 = _mm_load_pd(C + 2*lda);
+			register __m128d c30_c31 = _mm_load_pd(C + 3*lda);
+                        register __m128d c02_c03 = _mm_load_pd(C + 2);
+                        register __m128d c12_c13 = _mm_load_pd(C + lda + 2);
+                        register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
+                        register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
 
-    register __m128d temp1, temp2;
-
-    for (int i = 0; i < 4; i++)
-    {
-        register __m128d b  = _mm_load_pd(B + i*lda);
-        register __m128d b1 = _mm_load_pd(B + i*lda + 2);
-
-        register __m128d a1 = _mm_load1_pd(A + i*lda);  
-        temp1 = _mm_mul_pd(a1,b);
-        register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
-        temp2 = _mm_mul_pd(a2,b);
-        c00_c01 = _mm_add_pd(c00_c01, temp1);
-        c10_c11 = _mm_add_pd(c10_c11, temp2);
-
-        register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
-        temp1 = _mm_mul_pd(a3,b);
-        register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
-        temp2 = _mm_mul_pd(a4,b);
-        c20_c21 = _mm_add_pd(c20_c21, temp1);
-        c30_c31 = _mm_add_pd(c30_c31, temp2);
-
-
-        temp1 = _mm_mul_pd(a1,b1);
-        temp2 = _mm_mul_pd(a2,b1);
-        c02_c03 = _mm_add_pd(c02_c03, temp1);
-        c12_c13 = _mm_add_pd(c12_c13, temp2);
-
-
-        temp1 = _mm_mul_pd(a3,b1);
-        temp2 = _mm_mul_pd(a4,b1);
-        c22_c23 = _mm_add_pd(c22_c23, temp1);
-        c32_c33 = _mm_add_pd(c32_c33, temp2);
-    }
-    _mm_store_pd(C, c00_c01);
-    _mm_store_pd(C + lda, c10_c11);
-    _mm_store_pd(C + 2*lda, c20_c21);
-    _mm_store_pd(C + 3*lda, c30_c31);
-    _mm_store_pd(C + 2, c02_c03);
-    _mm_store_pd(C + lda + 2, c12_c13);
-    _mm_store_pd(C + 2*lda + 2, c22_c23);
-    _mm_store_pd(C + 3*lda + 2, c32_c33);
+				//for (int i = 0; i < 4; i = i + 2)
+				//	{
+						register __m128d b  = _mm_load_pd(B);
+						register __m128d b1 = _mm_load_pd(B + 2);
+						register __m128d a1 = _mm_load1_pd(A);  
+						register __m128d b2  = _mm_load_pd(B + 1*lda);
+						register __m128d b3 = _mm_load_pd(B + 1*lda + 2);
+						register __m128d a2 = _mm_load1_pd(A + 1*lda);  
+						c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+                                                c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+						c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a2,b2));
+                                                c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a2,b3));
+						b  = _mm_load_pd(B + 2*lda);
+						b1 = _mm_load_pd(B + 2*lda + 2);
+						a1 = _mm_load1_pd(A + 2*lda);  
+						b2  = _mm_load_pd(B + 3*lda);
+						b3 = _mm_load_pd(B + 3*lda + 2);
+						a2 = _mm_load1_pd(A + 3*lda);  
+						c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+                                                c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+						c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a2,b2));
+                                                c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a2,b3));
+						a1 = _mm_load1_pd(A + 2*lda + 1);
+						a2 = _mm_load1_pd(A + 3*lda + 1);
+						c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a1,b));
+                                                c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a1,b1));
+						c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b2));
+                                                c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b3));
+						b  = _mm_load_pd(B);
+						b1 = _mm_load_pd(B + 2);
+						a1 = _mm_load1_pd(A + 1);
+						b2  = _mm_load_pd(B + 1*lda);
+						b3 = _mm_load_pd(B + 1*lda + 2);
+						a2 = _mm_load1_pd(A + 1*lda + 1);
+						c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a1,b));
+                                                c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a1,b1));
+						c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b2));
+                                                c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b3));
+						a1 = _mm_load1_pd(A + 2);
+						a2 = _mm_load1_pd(A + 1*lda + 2);
+						c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a1,b));
+                                                c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a1,b1));
+						c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a2,b2));
+                                                c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a2,b3));
+						b  = _mm_load_pd(B + 2*lda);
+						b1 = _mm_load_pd(B + 2*lda + 2);
+						a1 = _mm_load1_pd(A + 2*lda + 2);
+						b2  = _mm_load_pd(B + 3*lda);
+						b3 = _mm_load_pd(B + 3*lda + 2);
+						a2 = _mm_load1_pd(A + 3*lda + 2);
+						c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a1,b));
+                                                c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a1,b1));
+						c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a2,b2));
+                                                c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a2,b3));
+						a1 = _mm_load1_pd(A + 2*lda + 3);
+						a2 = _mm_load1_pd(A + 3*lda + 3);
+						c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a1,b));
+                                                c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a1,b1));
+						c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a2,b2));
+                                                c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a2,b3));
+						b  = _mm_load_pd(B);
+						b1 = _mm_load_pd(B + 2);
+						a1 = _mm_load1_pd(A + 3);
+						b2  = _mm_load_pd(B + 1*lda);
+						b3 = _mm_load_pd(B + 1*lda + 2);
+						a2 = _mm_load1_pd(A + 1*lda + 3);
+						c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a1,b));
+                                                c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a1,b1));
+						c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a2,b2));
+                                                c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a2,b3));
+						//register __m128d a2 = _mm_load1_pd(A + i*lda + 1);
+						//register __m128d a3 = _mm_load1_pd(A + i*lda + 2);
+						//register __m128d a4 = _mm_load1_pd(A + i*lda + 3);
+						//register __m128d b  = _mm_load_pd(B + i*lda);
+						//register __m128d a4 = _mm_load1_pd(A + i + 3*lda);
+						//register __m128d b1 = _mm_load_pd(B + i*lda + 2);
+						//c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+						//c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+						//c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+						//c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+                                                //c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+                                                //c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+                                                //c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+                                                //c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+				//}
+_mm_store_pd(C, c00_c01);
+_mm_store_pd(C + lda, c10_c11);
+_mm_store_pd(C + 2*lda, c20_c21);
+_mm_store_pd(C + 3*lda, c30_c31);
+_mm_store_pd(C + 2, c02_c03);
+_mm_store_pd(C + lda + 2, c12_c13);
+_mm_store_pd(C + 2*lda + 2, c22_c23);
+_mm_store_pd(C + 3*lda + 2, c32_c33);
 
 }
+
 
 void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* restrict B, double* restrict C)
 {
@@ -153,6 +208,52 @@ void do_block_vector (int lda, int M, int N, int K, double* restrict A, double* 
 				}
 }
 }
+
+ void do_vector_avx (int lda, double* restrict A, double* restrict B, double* restrict C)
+ {
+ 
+             register __m256d c00_c03 = _mm256_load_pd(C);
+             //printf("Hello\n");
+             register __m256d c10_c13 = _mm256_load_pd(C + lda);
+             register __m256d c20_c23 = _mm256_load_pd(C + 2*lda);
+             register __m256d c30_c33 = _mm256_load_pd(C + 3*lda);
+ 
+             for( int i = 0 ; i < 4 ; i++) {
+ 
+                 register __m256d a0 = _mm256_set1_pd(A[i*lda]);
+                 //register __m256d a1 = _mm256_shuffle_pd(a0,a0,0);
+                 register __m256d b1 = _mm256_load_pd(B + i*lda);
+                 c00_c03 = _mm256_add_pd(c00_c03, _mm256_mul_pd(a0,b1));
+                 a0 = _mm256_set1_pd(A[i*lda +1]);
+                 //a1 = _mm256_shuffle_pd(a0,a0,0);
+                 c10_c13 = _mm256_add_pd(c10_c13, _mm256_mul_pd(a0,b1));
+                 a0 = _mm256_set1_pd(A[i*lda + 2]);
+                 //a1 = _mm256_shuffle_pd(a0,a0,0);
+                 c20_c23 = _mm256_add_pd(c20_c23, _mm256_mul_pd(a0,b1));
+                 a0 = _mm256_set1_pd(A[i*lda + 3]);
+                 //a1 = _mm256_shuffle_pd(a0,a0,0);
+                 c30_c33 = _mm256_add_pd(c30_c33, _mm256_mul_pd(a0,b1));
+             }
+ 
+ _mm256_store_pd(C, c00_c03);
+ _mm256_store_pd(C + 1*lda, c10_c13);
+ _mm256_store_pd(C + 2*lda, c20_c23);
+ _mm256_store_pd(C + 3*lda, c30_c33);
+ }
+ 
+ void do_block_vector_avx(int lda,int M,int N,int K, double* restrict A, double* restrict B, double* restrict C)
+ {
+     for (int i = 0; i < M; i = i + 4)
+         for( int j = 0 ; j < N ; j = j + 4)
+             {
+                 for( int k = 0 ; k < K ; k = k + 4) {
+                     do_vector_avx(lda, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+ 
+                 }
+ 
+             }
+ }
+
 
 void do_copy_p2(int lda, int M, int N, double *C) {
 
@@ -205,7 +306,13 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
                  int K_1 = min (BLOCK_SIZE, K-k);
  
                  if((M_1 % 4) == 0 && (N_1 % 4) == 0 && (K_1 % 4) == 0)
-                    do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                    #ifdef SSE
+                        do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                    #endif
+                    
+                    #ifdef AVX
+                        do_block_vector_avx(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+                    #endif
                  else
                      do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
 
