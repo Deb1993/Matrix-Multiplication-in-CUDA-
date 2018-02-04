@@ -76,14 +76,23 @@ static void do_block (int lda, int M, int N, int K, double *restrict A, double *
         {
             /* Compute C(i,j) */
             double cij = C[i*lda+j];
-            for (int k = 0; k < K; ++k)
-#ifdef TRANSPOSE
+            for (int k = 0; k < K;) {
                 cij += A[k*lda+i] * B[k*lda+j];
-#else
-            cij += A[i*lda+k] * B[k*lda+j];
-#endif
+                k+=1;
+                if(k < K)
+                    cij += A[k*lda+i] * B[k*lda+j];
+                k+=1;
+                if(k < K)
+                    cij += A[k*lda+i] * B[k*lda+j];
+                k+=1;
+                if(k < K)
+                    cij += A[k*lda+i] * B[k*lda+j];
+                k+=1;
+            }
             C[i*lda+j] = cij;
+            __builtin_prefetch(B + lda);
         }
+        __builtin_prefetch(A + lda);
 }
 
 void do_vector (int lda, double* restrict A, double* restrict B, double* restrict C)
@@ -319,8 +328,8 @@ void do_copy(int lda, int M, int N, double *C) {
 
 void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
 
-    memset(A_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2_K);
-    memset(B_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2_K);
+    memset(A_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2_K*sizeof(double));
+    memset(B_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2_K*sizeof(double));
  
      double *src = A;
      double *dst = A_padded;
@@ -339,7 +348,7 @@ void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
 }
 
 void pad_C(int lda, int M, int N, double *C) {
-    memset(C_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2);
+    memset(C_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2*sizeof(double));
     double *src = C, *dst = C_padded;
     for(int i = 0; i < M; i+=1) {
         memcpy(dst, src, N*sizeof(double));
@@ -401,12 +410,21 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
                 /* Correct block dimensions if block "goes off edge of" the matrix */
                 int K = min (BLOCK_SIZE_2_K, size-k);
                 pad_matrices(lda, M, N, K, A + k*lda + i, B + k*lda + j);
-                //printf("NORMAL\n");
-                //printMatrix(A, M, K);
-                //printf("PADDED\n");
-                //printMatrix(A_padded, M, K);
                 /* Perform individual block dgemm */
-                do_block1(BLOCK_SIZE_2, M, N, K, A_padded, B_padded, C_padded);
+                int M_1 = M, N_1 = N, K_1 = K;
+                if(M_1 < BLOCK_SIZE_2) {
+                    M_1 = (M_1/4)*4 + 4;
+                    M_1 = min(BLOCK_SIZE_2, M_1);
+                }
+                if(N_1 < BLOCK_SIZE_2) {
+                    N_1 = (N_1/4)*4 + 4;
+                    N_1 = min(BLOCK_SIZE_2, N_1);
+                }
+                if(K_1 < BLOCK_SIZE_2) {
+                    K_1 = (K_1/4)*4 + 4;
+                    K_1 = min(BLOCK_SIZE_2_K, K_1);
+                }
+                do_block1(BLOCK_SIZE_2, M_1, N_1, K_1, A_padded, B_padded, C_padded);
             }
             do_copy(lda, M, N, C + i*lda + j);
         }
