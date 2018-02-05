@@ -29,6 +29,7 @@ ifneq ($(AMAZON), 0)
 atlas := 1
 multi := 0
 NO_BLAS = 1
+amazon := 1
 include $(PUB)/Arch/arch.gnu_c99.generic
 endif
 endif
@@ -63,7 +64,7 @@ endif
 
 MY_OPT = -O4 -mfpmath=sse -mno-align-double -march=core2
 
-ifeq ($(AMAZON), 1)
+ifeq ($(amazon), 1)
     MY_OPT += -mavx
 endif
 
@@ -74,7 +75,7 @@ objects = benchmark.o dgemm-naive.o dgemm-blocked.o dgemm-blas.o
 UTIL   = wall_time.o cmdLine.o
 
 
-ifeq ($(AMAZON), 1)
+ifeq ($(amazon), 1)
     targets += benchmark-avx
     objects += avx-dgemm-blocked.o
 endif
