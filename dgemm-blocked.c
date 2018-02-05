@@ -71,76 +71,90 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
                         register __m128d c12_c13 = _mm_load_pd(C + lda + 2);
                         register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
                         register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
+    
+        register __m128d b  = _mm_load_pd(B);
+        register __m128d b1 = _mm_load_pd(B + 2);
 
-			register __m128d b  = _mm_load_pd(B);
-			register __m128d b1 = _mm_load_pd(B + 2);
-			register __m128d a1 = _mm_load1_pd(A);  
-			register __m128d b2  = _mm_load_pd(B + 1*lda);
-			register __m128d b3 = _mm_load_pd(B + 1*lda + 2);
-			register __m128d a2 = _mm_load1_pd(A + 1*lda);  
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
-                        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a2,b2));
-                        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B + 2*lda);
-			b1 = _mm_load_pd(B + 2*lda + 2);
-			a1 = _mm_load1_pd(A + 2*lda);  
-			b2  = _mm_load_pd(B + 3*lda);
-			b3 = _mm_load_pd(B + 3*lda + 2);
-			a2 = _mm_load1_pd(A + 3*lda);  
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
-			c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a2,b2));
-			c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a2,b3));
-			a1 = _mm_load1_pd(A + 2*lda + 1);
-			a2 = _mm_load1_pd(A + 3*lda + 1);
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a1,b));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a1,b1));
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b2));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B);
-			b1 = _mm_load_pd(B + 2);
-			a1 = _mm_load1_pd(A + 1);
-			b2  = _mm_load_pd(B + 1*lda);
-			b3 = _mm_load_pd(B + 1*lda + 2);
-			a2 = _mm_load1_pd(A + 1*lda + 1);
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a1,b));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a1,b1));
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b2));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b3));
-			a1 = _mm_load1_pd(A + 2);
-			a2 = _mm_load1_pd(A + 1*lda + 2);
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a1,b));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a1,b1));
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a2,b2));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B + 2*lda);
-			b1 = _mm_load_pd(B + 2*lda + 2);
-			a1 = _mm_load1_pd(A + 2*lda + 2);
-			b2  = _mm_load_pd(B + 3*lda);
-			b3 = _mm_load_pd(B + 3*lda + 2);
-			a2 = _mm_load1_pd(A + 3*lda + 2);
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a1,b));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a1,b1));
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a2,b2));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a2,b3));
-			a1 = _mm_load1_pd(A + 2*lda + 3);
-			a2 = _mm_load1_pd(A + 3*lda + 3);
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a1,b));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a1,b1));
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a2,b2));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B);
-			b1 = _mm_load_pd(B + 2);
-			a1 = _mm_load1_pd(A + 3);
-			b2  = _mm_load_pd(B + 1*lda);
-			b3 = _mm_load_pd(B + 1*lda + 2);
-			a2 = _mm_load1_pd(A + 1*lda + 3);
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a1,b));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a1,b1));
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a2,b2));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a2,b3));
+        register __m128d a1 = _mm_load1_pd(A);
+        register __m128d a2 = _mm_load1_pd(A + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
 
+        register __m128d a3 = _mm_load1_pd(A + 2);
+        register __m128d a4 = _mm_load1_pd(A + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+
+
+        b  = _mm_load_pd(B + 1*lda);
+        b1 = _mm_load_pd(B + 1*lda + 2);
+
+        a1 = _mm_load1_pd(A + 1*lda);
+        a2 = _mm_load1_pd(A + 1*lda + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+
+        a3 = _mm_load1_pd(A + 1*lda + 2);
+        a4 = _mm_load1_pd(A + 1*lda + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+
+
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+
+        b  = _mm_load_pd(B + 2*lda);
+        b1 = _mm_load_pd(B + 2*lda + 2);
+
+        a1 = _mm_load1_pd(A + 2*lda);
+        a2 = _mm_load1_pd(A + 2*lda + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+
+        a3 = _mm_load1_pd(A + 2*lda + 2);
+        a4 = _mm_load1_pd(A + 2*lda + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+
+
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+
+	b  = _mm_load_pd(B + 3*lda);
+        b1 = _mm_load_pd(B + 3*lda + 2);
+
+        a1 = _mm_load1_pd(A + 3*lda);
+        a2 = _mm_load1_pd(A + 3*lda + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+
+        a3 = _mm_load1_pd(A + 3*lda + 2);
+        a4 = _mm_load1_pd(A + 3*lda + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+
+
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+			
 			_mm_store_pd(C, c00_c01);
 			_mm_store_pd(C + lda, c10_c11);
 			_mm_store_pd(C + 2*lda, c20_c21);
