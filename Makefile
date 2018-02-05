@@ -29,6 +29,7 @@ ifneq ($(AMAZON), 0)
 atlas := 1
 multi := 0
 NO_BLAS = 1
+amazon := 1
 include $(PUB)/Arch/arch.gnu_c99.generic
 endif
 endif
@@ -62,11 +63,22 @@ ifeq ($(NO_BLAS), 1)
 endif
 
 MY_OPT = -O4 -mfpmath=sse -mno-align-double -march=core2
+
+ifeq ($(amazon), 1)
+    MY_OPT += -mavx
+endif
+
 OPTIMIZATION = $(MY_OPT)
 
 targets = benchmark-naive benchmark-blocked benchmark-blas
-objects = benchmark.o dgemm-naive.o dgemm-blocked.o dgemm-blas.o  
+objects = benchmark.o dgemm-naive.o dgemm-blocked.o dgemm-blas.o
 UTIL   = wall_time.o cmdLine.o
+
+
+ifeq ($(amazon), 1)
+    targets += benchmark-avx
+    objects += avx-dgemm-blocked.o
+endif
 
 .PHONY : default
 default : all
@@ -79,6 +91,8 @@ benchmark-naive : benchmark.o dgemm-naive.o  $(UTIL)
 benchmark-blocked : benchmark.o dgemm-blocked.o $(UTIL)
 	$(CC) -g -o $@ $^ $(LDLIBS)
 benchmark-blas : benchmark.o dgemm-blas.o $(UTIL)
+	$(CC) -g -o $@ $^ $(LDLIBS)
+benchmark-avx : benchmark.o avx-dgemm-blocked.o $(UTIL)
 	$(CC) -g -o $@ $^ $(LDLIBS)
 
 %.o : %.c

@@ -13,15 +13,12 @@
 #include <string.h>
 const char* dgemm_desc = "Simple blocked dgemm.";
 
-#define L1_CACHE 32*1024
-#define L2_CACHE 4*1024*1024
 #if !defined(BLOCK_SIZE)
 #define BLOCK_SIZE 32
-#define BLOCK_SIZE_2 416
 #define BLOCK_SIZE_2_K 32
+#define BLOCK_SIZE_2 416
 #endif
 
-#define TRANSPOSE 1
 
 #define min(a,b) (((a)<(b))?(a):(b))
 
@@ -35,7 +32,7 @@ static double C_padded[BLOCK_SIZE_2*BLOCK_SIZE_2] __attribute__ ((aligned (16)))
 static void do_block (int lda, int M, int N, int K, double *restrict A, double *restrict B, double *restrict C)
 {
     /* For each row i of A */
-    for (int i = 0; i < M; ++i)
+    for (int i = 0; i < M; ++i) {
         /* For each column j of B */ 
         for (int j = 0; j < N; ++j) 
         {
@@ -53,11 +50,13 @@ static void do_block (int lda, int M, int N, int K, double *restrict A, double *
                 if(k < K)
                     cij += A[k*lda+i] * B[k*lda+j];
                 k+=1;
+            __builtin_prefetch(B + (k+1)*lda);
+	    __builtin_prefetch(A + (k+1)*lda);
             }
             C[i*lda+j] = cij;
-            __builtin_prefetch(B + lda);
         }
-        __builtin_prefetch(A + lda);
+    __builtin_prefetch(C + (i+1)*lda);
+    }
 }
 
 void do_vector (int lda, double* restrict A, double* restrict B, double* restrict C)
@@ -71,76 +70,89 @@ void do_vector (int lda, double* restrict A, double* restrict B, double* restric
                         register __m128d c12_c13 = _mm_load_pd(C + lda + 2);
                         register __m128d c22_c23 = _mm_load_pd(C + 2*lda + 2);
                         register __m128d c32_c33 = _mm_load_pd(C + 3*lda + 2);
+    
+        register __m128d b  = _mm_load_pd(B);
+        register __m128d b1 = _mm_load_pd(B + 2);
 
-			register __m128d b  = _mm_load_pd(B);
-			register __m128d b1 = _mm_load_pd(B + 2);
-			register __m128d a1 = _mm_load1_pd(A);  
-			register __m128d b2  = _mm_load_pd(B + 1*lda);
-			register __m128d b3 = _mm_load_pd(B + 1*lda + 2);
-			register __m128d a2 = _mm_load1_pd(A + 1*lda);  
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
-                        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a2,b2));
-                        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B + 2*lda);
-			b1 = _mm_load_pd(B + 2*lda + 2);
-			a1 = _mm_load1_pd(A + 2*lda);  
-			b2  = _mm_load_pd(B + 3*lda);
-			b3 = _mm_load_pd(B + 3*lda + 2);
-			a2 = _mm_load1_pd(A + 3*lda);  
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
-			c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
-			c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a2,b2));
-			c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a2,b3));
-			a1 = _mm_load1_pd(A + 2*lda + 1);
-			a2 = _mm_load1_pd(A + 3*lda + 1);
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a1,b));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a1,b1));
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b2));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B);
-			b1 = _mm_load_pd(B + 2);
-			a1 = _mm_load1_pd(A + 1);
-			b2  = _mm_load_pd(B + 1*lda);
-			b3 = _mm_load_pd(B + 1*lda + 2);
-			a2 = _mm_load1_pd(A + 1*lda + 1);
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a1,b));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a1,b1));
-			c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b2));
-			c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b3));
-			a1 = _mm_load1_pd(A + 2);
-			a2 = _mm_load1_pd(A + 1*lda + 2);
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a1,b));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a1,b1));
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a2,b2));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B + 2*lda);
-			b1 = _mm_load_pd(B + 2*lda + 2);
-			a1 = _mm_load1_pd(A + 2*lda + 2);
-			b2  = _mm_load_pd(B + 3*lda);
-			b3 = _mm_load_pd(B + 3*lda + 2);
-			a2 = _mm_load1_pd(A + 3*lda + 2);
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a1,b));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a1,b1));
-			c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a2,b2));
-			c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a2,b3));
-			a1 = _mm_load1_pd(A + 2*lda + 3);
-			a2 = _mm_load1_pd(A + 3*lda + 3);
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a1,b));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a1,b1));
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a2,b2));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a2,b3));
-			b  = _mm_load_pd(B);
-			b1 = _mm_load_pd(B + 2);
-			a1 = _mm_load1_pd(A + 3);
-			b2  = _mm_load_pd(B + 1*lda);
-			b3 = _mm_load_pd(B + 1*lda + 2);
-			a2 = _mm_load1_pd(A + 1*lda + 3);
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a1,b));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a1,b1));
-			c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a2,b2));
-			c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a2,b3));
+        register __m128d a1 = _mm_load1_pd(A);
+        register __m128d a2 = _mm_load1_pd(A + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
 
+        register __m128d a3 = _mm_load1_pd(A + 2);
+        register __m128d a4 = _mm_load1_pd(A + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+
+
+        b  = _mm_load_pd(B + 1*lda);
+        b1 = _mm_load_pd(B + 1*lda + 2);
+
+        a1 = _mm_load1_pd(A + 1*lda);
+        a2 = _mm_load1_pd(A + 1*lda + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+
+        a3 = _mm_load1_pd(A + 1*lda + 2);
+        a4 = _mm_load1_pd(A + 1*lda + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+
+
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+
+        b  = _mm_load_pd(B + 2*lda);
+        b1 = _mm_load_pd(B + 2*lda + 2);
+
+        a1 = _mm_load1_pd(A + 2*lda);
+        a2 = _mm_load1_pd(A + 2*lda + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+
+        a3 = _mm_load1_pd(A + 2*lda + 2);
+        a4 = _mm_load1_pd(A + 2*lda + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+
+
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+
+	b  = _mm_load_pd(B + 3*lda);
+        b1 = _mm_load_pd(B + 3*lda + 2);
+
+        a1 = _mm_load1_pd(A + 3*lda);
+        a2 = _mm_load1_pd(A + 3*lda + 1);
+        c00_c01 = _mm_add_pd(c00_c01, _mm_mul_pd(a1,b));
+        c10_c11 = _mm_add_pd(c10_c11, _mm_mul_pd(a2,b));
+
+        a3 = _mm_load1_pd(A + 3*lda + 2);
+        a4 = _mm_load1_pd(A + 3*lda + 3);
+        c20_c21 = _mm_add_pd(c20_c21, _mm_mul_pd(a3,b));
+        c30_c31 = _mm_add_pd(c30_c31, _mm_mul_pd(a4,b));
+
+
+        c02_c03 = _mm_add_pd(c02_c03, _mm_mul_pd(a1,b1));
+        c12_c13 = _mm_add_pd(c12_c13, _mm_mul_pd(a2,b1));
+
+
+        c22_c23 = _mm_add_pd(c22_c23, _mm_mul_pd(a3,b1));
+        c32_c33 = _mm_add_pd(c32_c33, _mm_mul_pd(a4,b1));
+			
 			_mm_store_pd(C, c00_c01);
 			_mm_store_pd(C + lda, c10_c11);
 			_mm_store_pd(C + 2*lda, c20_c21);
@@ -177,8 +189,10 @@ void do_block1 (int lda, int M, int N, int K, double *restrict A, double *restri
                      do_block_vector(lda,M_1,N_1,K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
                  else
                      do_block(lda, M_1, N_1, K_1, A + k*lda + i, B + k*lda + j, C + i*lda + j);
+
              }
          }
+		    __builtin_prefetch(C + (i+BLOCK_SIZE)*lda);
      }
  }
 
@@ -189,6 +203,7 @@ void do_transpose(int lda, double *A) {
             A[i*lda + j] = A[j*lda + i];
             A[j*lda + i] = temp;
         }
+        __builtin_prefetch(A + (i+1)*lda);
     }
 }
 
@@ -200,6 +215,7 @@ void do_copy(int lda, int M, int N, double *C) {
         memcpy(dst, src, N*sizeof(double));
         src+=BLOCK_SIZE_2;
         dst+=lda;
+        __builtin_prefetch(src);
     }
 }
 
@@ -214,6 +230,7 @@ void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
          memcpy(dst, src, M*sizeof(double));
          src+=lda;
          dst+=BLOCK_SIZE_2;
+        __builtin_prefetch(src);
      }
      src = B;
      dst = B_padded;
@@ -221,16 +238,17 @@ void pad_matrices(int lda, int M, int N, int K, double *A, double *B) {
          memcpy(dst, src, N*sizeof(double));
          src+=lda;
          dst+=BLOCK_SIZE_2;
+        __builtin_prefetch(src);
      }
 }
 
 void pad_C(int lda, int M, int N, double *C) {
-    memset(C_padded, 0, BLOCK_SIZE_2*BLOCK_SIZE_2*sizeof(double));
     double *src = C, *dst = C_padded;
     for(int i = 0; i < M; i+=1) {
         memcpy(dst, src, N*sizeof(double));
         src+=lda;
         dst+=BLOCK_SIZE_2;
+        __builtin_prefetch(src);
     }
 }
 
@@ -250,20 +268,19 @@ void printMatrix(double *A, int M, int N) {
 void square_dgemm (int lda, double *restrict A, double *restrict B, double *restrict C)
 {
     do_transpose(lda, A);
-    int size = lda;
 
     /* For each block-row of A */ 
-    for (int i = 0; i < size; i += BLOCK_SIZE_2) {
+    for (int i = 0; i < lda; i += BLOCK_SIZE_2) {
         /* For each block-column of B */
-        for (int j = 0; j < size; j += BLOCK_SIZE_2) {
+        for (int j = 0; j < lda; j += BLOCK_SIZE_2) {
             /* Accumulate block dgemms into block of C */
-            int M = min (BLOCK_SIZE_2, size-i);
-            int N = min (BLOCK_SIZE_2, size-j);
+            int M = min (BLOCK_SIZE_2, lda-i);
+            int N = min (BLOCK_SIZE_2, lda-j);
             pad_C(lda, M, N, C + i*lda + j);
-            for (int k = 0; k < size; k += BLOCK_SIZE_2_K)
+            for (int k = 0; k < lda; k += BLOCK_SIZE_2_K)
             {
                 /* Correct block dimensions if block "goes off edge of" the matrix */
-                int K = min (BLOCK_SIZE_2_K, size-k);
+                int K = min (BLOCK_SIZE_2_K, lda-k);
                 pad_matrices(lda, M, N, K, A + k*lda + i, B + k*lda + j);
                 /* Perform individual block dgemm */
                 int M_1 = M, N_1 = N, K_1 = K;
@@ -280,9 +297,13 @@ void square_dgemm (int lda, double *restrict A, double *restrict B, double *rest
                     K_1 = min(BLOCK_SIZE_2_K, K_1);
                 }
                 do_block1(BLOCK_SIZE_2, M_1, N_1, K_1, A_padded, B_padded, C_padded);
+     
+		__builtin_prefetch(A + (k+1)*BLOCK_SIZE_2_K);
+		__builtin_prefetch(B + (k+1)*BLOCK_SIZE_2_K);
             }
             do_copy(lda, M, N, C + i*lda + j);
         }
+	__builtin_prefetch(C + (i+1)*BLOCK_SIZE_2);
     }
     do_transpose(lda, A);
 }
