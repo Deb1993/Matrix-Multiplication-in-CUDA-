@@ -63,7 +63,7 @@ endif
 
 MY_OPT = -O4 -mfpmath=sse -mno-align-double -march=core2
 
-ifeq ($(NO_BLAS), 1)
+ifeq ($(AMAZON), 1)
     MY_OPT += -mavx
 endif
 
@@ -74,7 +74,7 @@ objects = benchmark.o dgemm-naive.o dgemm-blocked.o dgemm-blas.o
 UTIL   = wall_time.o cmdLine.o
 
 
-ifeq ($(NO_BLAS), 1)
+ifeq ($(AMAZON), 1)
     targets += benchmark-avx
     objects += avx-dgemm-blocked.o
 endif
